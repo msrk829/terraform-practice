@@ -1,0 +1,40 @@
+#!/bin/bash
+
+#cdh cluster
+
+# Extract queue names and states, removing "root." from the output
+ssh alephys@10.1.14.154 'curl http://cdh2node1.infra.alephys.com:8088/ws/v1/cluster/scheduler | grep -E '"queueName"'' > cdh_queues.json
+cdhqueue_info=$(jq -r '.scheduler.schedulerInfo.rootQueue.childQueues.queue[] | "\(.queueName) - \(.state)"' cdh_queues.json | sed 's/root\.//g')
+
+# Print the modified queue names and states
+echo "$cdhqueue_info"
+
+#cdp cluster
+
+#extracting queue names
+ssh alephys@10.1.14.115 'curl http://sivanode1.infra.alephys.com:8088/ws/v1/cluster/scheduler | grep -E '"queueName"'' > cdp_queues.json
+
+# Extract queue names and states
+cdpqueue_info=$(jq -r '.scheduler.schedulerInfo.queues.queue[] | "\(.queueName) - \(.state)"' cdp_queues.json)
+
+# Print the queue names and states
+echo "$cdpqueue_info"
+
+# Find differences between CDH and CDP queues
+differences=()
+
+for cdh_queue in "${cdhqueue_info[@]}"; do
+    if [[ ! " ${cdpqueue_info[@]} " =~ " ${cdh_queue} " ]]; then
+        differences+=("$cdh_queue")
+    fi
+done
+
+for cdp_queue in "${cdpqueue_info[@]}"; do
+    if [[ ! " ${cdhqueue_info[@]} " =~ " ${cdp_queue} " ]]; then
+        differences+=("$cdp_queue")
+    fi
+done
+
+# Print the differences
+printf '\nDifferences in CDH and CDP cluster queues:\n'
+printf '%s\n' "${differences[@]}"
